@@ -72,7 +72,12 @@ to determine_and_set_next_stop
       [
       foreach item bus_color bus_routes [
         ; for each station in the route of this buss color 
-        if ? = current_stop [
+        let prev_idx idx - 1
+        if prev_idx = -1[
+          set prev_idx length item bus_color bus_routes
+          set prev_idx prev_idx - 1
+        ]
+        if ? = current_stop and ( idx = 0 or previous_stop = item prev_idx item bus_color bus_routes )[
           ; if we found the current station, set the next station
           ifelse idx + 1 = length item bus_color bus_routes [
             ; if we are at the last stop in the list
@@ -188,8 +193,8 @@ to-report create-initiated-bus
            if bus_type = new_bus_type [
              ; we found a bus type that has no next station and is seated at central station
              set bus_color new_bus_color
-             set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [13 23 14 0 15 18 15 12 22] [9 8 6 8 2 8]]
-             set central_to_route_routes [[3] [3 4 5] [3 9 20 21 22] [3 9]]
+             set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [22 13 23 14 0 15 18 15 12] [9 8 6 8 2 8]]
+             set central_to_route_routes [[3 4] [3 4 5 16] [3 9 20 21 22 13] [3 9 8]]
              set bus_stops_to_idx ["Amstel" "Amstelveenseweg" "Buikslotermeer" "Centraal" "Dam"
                "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
                "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
