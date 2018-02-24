@@ -1,11 +1,13 @@
+;Routing table indexes:
 ;0 blue
 ;1 red
 ;2 green
 ;3 black
-;4 "Evertsenstraat"
-;5 "Museumplein"
-;6 "Hendrikkade"
+;4 "Evertsenstraat" 5
+;5 "Museumplein" 13
+;6 "Hendrikkade" 9
 
+; Graph indexes
 ;0 "Amstel"
 ;1 "Amstelveenseweg" 
 ;2 "Buikslotermeer" 
@@ -32,7 +34,8 @@
 ;23 "Zuid"
 
 ; Implicit things nobody said:
-; you add busses at a tick and they only appear at the next tick; moreover, 
+; you add busses at a tick and they only appear at the next tick; moreover, id of the bus with add-bus is unknown...
+
 buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
   bus_id          ; The ID of a given agent (bus). Each agent has a unique ID.
@@ -53,6 +56,7 @@ buses-own [
   bus_color
   initiated_buses_types
   initiated_buses_colors
+  routing_table
 ]
 
 globals [graph]
@@ -199,6 +203,7 @@ to-report create-initiated-bus
                "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
                "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
                "Surinameplein" "UvA" "VU" "Waterlooplein" "Weesperplein" "Wibautstraat" "Zuid"]
+             set routing_table [["D" 5 13 9 "D" "D" "D"] [5 "D" 13 13 "D" "D" 13] [13 13 "D" 13 13 "D" 13] [9 9 9 "D" 9 9 "D"]]
              set initiated_buses_types []
              set initiated_buses_colors []
              set new_bus_id bus_id
@@ -225,6 +230,7 @@ to init-buses
       "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
       "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
       "Surinameplein" "UvA" "VU" "Waterlooplein" "Weesperplein" "Wibautstraat" "Zuid"]
+    set routing_table [["D" 5 13 9 "D" "D" "D"] [5 "D" 13 13 "D" "D" 13] [13 13 "D" 13 13 "D" 13] [9 9 9 "D" 9 9 "D"]]
     set initiated_buses_types []
     set initiated_buses_colors []
     ]
