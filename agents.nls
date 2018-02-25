@@ -57,164 +57,60 @@ buses-own [
   initiated_buses_types
   initiated_buses_colors
   routing_table
+  capacity
+  empty_capacity
 ]
 
 globals [graph]
 
-to determine_and_set_next_stop
-  ;create a method that sets next_stop of any bus to the next stop on that buss line
-
-  ask buses [
-    if self = myself [
-      ; in the bus that called this
-      
-      let idx 0
-      show bus_color
-      show bus_routes
-      ifelse bus_routes != 0
-      ; bus only initialized but not created
-      [
-      foreach item bus_color bus_routes [
-        ; for each station in the route of this buss color 
-        let prev_idx idx - 1
-        if prev_idx = -1[
-          set prev_idx length item bus_color bus_routes
-          set prev_idx prev_idx - 1
-        ]
-        if ? = current_stop and ( idx = 0 or previous_stop = item prev_idx item bus_color bus_routes )[
-          ; if we found the current station, set the next station
-          ifelse idx + 1 = length item bus_color bus_routes [
-            ; if we are at the last stop in the list
-            set next_stop item 0 item bus_color bus_routes
-          ]
-          [
-            let next_idx idx + 1
-            set next_stop item next_idx item bus_color bus_routes
-          ]
-          ;endif
-        ]
-        set idx idx + 1
-      ]
-      if next_stop = -1 [
-        ; if we did not find current_stop in the route of this buss line
-        ; means we are not on our line yet and we should go there 1st by finding our route in central_to_route_routes
-        set idx 0
-        foreach item bus_color central_to_route_routes [
-          ; for each station in the route from centrat to this colors route 
-          if ? = current_stop [
-            ; if we found the current station, set the next station
-            ifelse idx + 1 = length item bus_color bus_routes [
-              ; if we are at the last stop in the list
-              show "ERROR we should be on this buss colour normal route"
-            ]
-            [
-              let next_idx idx + 1
-              let my_colors_route_to_route item bus_color central_to_route_routes
-              set next_stop item next_idx my_colors_route_to_route
-            ]
-            ;endif
-          ]
-          set idx idx + 1
-        ]
-      ]
-    ]
-    [
-      show "tried to set next stop of an uncreated bus"
-    ]
-   ;endif
-    ]
-    
+to-report get-routing-index-of-destination [ dest_id ]
+  if dest_id = 5 [
+    ; Evertsenstraat
+    report 4
   ]
+  if dest_id = 13 [
+    ; Museumplein
+    report 5
+  ]
+  if dest_id = 9 [
+    ; Hendrikkade
+    report 6
+  ]
+  foreach [3 4 5 10 13 22 21 20 9] [
+    if ? = dest_id [
+      report 0
+    ]
+  ]
+  foreach [5 16 11 1 19 23 13 7 17] [
+    if ? = dest_id [
+      report 1
+    ]
+  ]
+  foreach [22 13 23 14 0 15 18 15 12] [
+    if ? = dest_id [
+      report 2
+    ]
+  ]
+  foreach [9 8 6 8 2 8] [
+    if ? = dest_id [
+      report 3
+    ]
+  ]
+  report -1
 end
+
+
 
 ; creating a bus takes:
 ;     - initiate-new-bus at tick i
 ;     - create-initiated-bus at tick i+1
 to initiate-new-bus [ b_type b_color ] 
    ;show "initiating"
-   ask buses [
-     if self = myself [
-         add-bus b_type
-         set initiated_buses_types lput b_type initiated_buses_types
-         set initiated_buses_colors lput b_color initiated_buses_colors
-         ;show "initiated bus"
-         ;show initiated_buses_types
-     ]
-   ]
-end
-
-to create-initiated-buses
-  ask buses [
-    while [ not empty? initiated_buses_types ] [
-      let new_bus_id create-initiated-bus
-    ]
-  ]
-end
-
-to-report create-initiated-bus
-  ; Creates 1 initiated bus
-  ; returns -1 on fail 
-  ; returns the id of the new bus on success
-   let new_bus_type -1
-   let new_bus_color -1
-   ;show "creating"
-   ask buses [
-       if self = myself [
-         ifelse  initiated_buses_types != 0
-         ; called this NOT from a bus that has been initiated but not created
-         [
-         ;show initiated_buses_types
-         ifelse empty? initiated_buses_types [
-           ; show "ERROR there should be at least a bus type on the stack in order to create"
-         ]
-         [
-           ; select the last bus type from queue and remove it from queue
-           set new_bus_type last initiated_buses_types
-           set initiated_buses_types but-last initiated_buses_types
-           set new_bus_color last initiated_buses_colors
-           set initiated_buses_colors but-last initiated_buses_colors
-         ]
-         ; endif
-         ]
-         [
-           ;show "tried to create from an uncreated bus"
-         ]
-         ;endif
-       ]
-   ]
-   
-   let new_bus_id -1
-   ifelse new_bus_type = -1 [
-     ; if we did not find a bus return
-     report -1
-   ]
-   [
-     ; else create the specified bus
-     ask buses[
-       ; find a free bus and set it   
-       if next_stop = -1[
-         if current_stop = 3[
-           if bus_type = new_bus_type [
-             ; we found a bus type that has no next station and is seated at central station
-             set bus_color new_bus_color
-             set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [22 13 23 14 0 15 18 15 12] [9 8 6 8 2 8]]
-             set central_to_route_routes [[3 4] [3 4 5 16] [3 9 20 21 22 13] [3 9 8]]
-             set bus_stops_to_idx ["Amstel" "Amstelveenseweg" "Buikslotermeer" "Centraal" "Dam"
-               "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
-               "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
-               "Surinameplein" "UvA" "VU" "Waterlooplein" "Weesperplein" "Wibautstraat" "Zuid"]
-             set routing_table [["D" 5 13 9 "D" "D" "D"] [5 "D" 13 13 "D" "D" 13] [13 13 "D" 13 13 "D" 13] [9 9 9 "D" 9 9 "D"]]
-             set initiated_buses_types []
-             set initiated_buses_colors []
-             set new_bus_id bus_id
-             ;show "created bus"
-           ]
-         ]
-       ]
-     ]
-   ]
-   report new_bus_id
-   ; endif
+   add-bus b_type
+   set initiated_buses_types lput b_type initiated_buses_types
+   set initiated_buses_colors lput b_color initiated_buses_colors
+   ;show "initiated bus"
+   ;show initiated_buses_types
 end
 
 to init-buses 
@@ -223,9 +119,9 @@ to init-buses
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   ask buses [
     if self = myself[
-    set bus_color 0
-    set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 24 13 7 17] [13 23 14 0 15 18 15 12 22] [9 8 6 2]]
-    set central_to_route_routes [[3] [3 4 5] [3 9 20 21 22] [3 9]]
+    set bus_color -1
+    set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [22 13 23 14 0 15 18 15 12] [9 8 6 8 2 8]]
+    set central_to_route_routes [[3 4] [3 4 5 16] [3 9 20 21 22 13] [3 9 8]]
     set bus_stops_to_idx ["Amstel" "Amstelveenseweg" "Buikslotermeer" "Centraal" "Dam"
       "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
       "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
@@ -238,6 +134,46 @@ to init-buses
   
 end
 
+to create-initiated-buses
+  let colors_to_create []
+  let types_to_create []
+  
+  foreach initiated_buses_types [ set types_to_create lput ? types_to_create ]
+  foreach initiated_buses_colors [ set colors_to_create lput ? colors_to_create ]
+  set initiated_buses_types []
+  set initiated_buses_colors []
+  
+  let new_bus_id -1
+  let new_bus_type -1
+  let new_bus_color -1
+  while [ not empty? types_to_create ] [
+    set new_bus_type last types_to_create
+    set types_to_create but-last types_to_create
+    set new_bus_color last colors_to_create
+    set colors_to_create but-last colors_to_create
+    
+    let colored_once false
+    ask buses[
+      if colored_once = false and bus_color = -1 and current_stop = 3 and bus_type = new_bus_type [
+        ; we found a new bus with type bus_type that is seated at central station
+        set bus_color new_bus_color
+        set new_bus_id bus_id
+        ;show word "colored bus id " (word bus_id (word " bus type " (word bus_type (word " with color " (word bus_color))))) 
+        set colored_once true
+        set capacity item bus_type [0 12 60 150]
+        set empty_capacity item bus_type [0 12 60 150]
+      ]
+      ;show "should not appear after color with the same bus id"
+    ]
+    if colored_once = false [
+      show "ERROR should have found a bus to color if it was in the list for initiating"
+      stop
+    ]
+  ]
+end
+
+
+
 to execute-actions
   ; Add decision making strategies for your agents here.
   ; You are allowed to use the global variable 'ticks'.
@@ -245,29 +181,141 @@ to execute-actions
   
   ; Description ( too see how a new bus is creted there is documentation above initiate-new-bus method ):
   
-  ; look at each bus and see whether it has any initiated busses that it needs to create
-  ask buses [
-    create-initiated-buses
+  if ticks = 2 and bus_id = 24 [
+    set bus_color 0
   ]
   
+  if bus_color != -1 [
+  create-initiated-buses
+  
+  ;pick up / drop off logic
+  pick-drop
+  
+  ;when not between stations aka when in a station
+  if current_stop != -1
+  [
+    determine-and-set-next-stop
+  ]
+
+  travel-to next_stop
+   
+
   ; initiate these busses from bus 24 at tick 2
-  if ticks = 2 [
-    ask bus 24 [
-      initiate-new-bus 2 1
-      initiate-new-bus 3 2
-      initiate-new-bus 1 3
-    ]
+  if ticks = 2 and bus_id = 24 [
+    let pass -1
   ]
   
-  
-  ; determine next stop of each bus and set it
-  ask buses [
-    if next_stop = -1
-    [
-      determine_and_set_next_stop
+  if ( ticks = 3 or ticks mod 33 = 0 ) and ticks < 100 and bus_id = 24 [
+    initiate-new-bus 3 0
+    initiate-new-bus 3 1
+    initiate-new-bus 3 2
+    initiate-new-bus 3 3
+  ]
+  if ticks > 2 and ticks < 100 and ticks mod 10 = 0 and bus_id = 24 [
+    initiate-new-bus 2 0
+    initiate-new-bus 2 1
+    initiate-new-bus 2 2
+    initiate-new-bus 2 3
+  ]
+  ]
+end
+
+to determine-and-set-next-stop
+  ;create a method that sets next_stop of any bus to the next stop on that buss line
+
+  let idx 0
+  ifelse bus_color != -1 
+  ; bus only initialized but not created
+  [
+  foreach item bus_color bus_routes [
+    ; for each station in the route of this buss color 
+    let prev_idx idx - 1
+    if prev_idx = -1[
+      set prev_idx length item bus_color bus_routes
+      set prev_idx prev_idx - 1
     ]
-    travel-to next_stop
+    if ? = current_stop and ( idx = 0 or previous_stop = item prev_idx item bus_color bus_routes )[
+      ; if we found the current station, set the next station
+      ifelse idx + 1 = length item bus_color bus_routes [
+        ; if we are at the last stop in the list
+        set next_stop item 0 item bus_color bus_routes
+      ]
+      [
+        let next_idx idx + 1
+        set next_stop item next_idx item bus_color bus_routes
+        ;show word "at stop " (word current_stop (word " set next stop " (word next_stop)))
+      ]
+      ;endif
+    ]
+    set idx idx + 1
+  ]
+  if next_stop = -1 [
+    ; if we did not find current_stop in the route of this buss line
+    ; means we are not on our line yet and we should go there 1st by finding our route in central_to_route_routes
+    set idx 0
+    foreach item bus_color central_to_route_routes [
+      ; for each station in the route from centrat to this colors route 
+      if ? = current_stop [
+        ; if we found the current station, set the next station
+        ifelse idx + 1 = length item bus_color bus_routes [
+          ; if we are at the last stop in the list
+          show "ERROR we should be on this buss colour normal route"
+        ]
+        [
+          let next_idx idx + 1
+          let my_colors_route_to_route item bus_color central_to_route_routes
+          set next_stop item next_idx my_colors_route_to_route
+        ]
+        ;endif
+      ]
+      set idx idx + 1
+    ]
+  ]
+  ]
+  [
+    ;show "WARNING tried to set next stop of an uncreated bus"
+  ]
+end
+
+
+
+;picking up and delivering logic
+;pick up who
+to pick-drop
+  ;pick up / drop off logic
+  
+  ;Drop first
+  if current_stop != -1 [
+    ;if bus is at a station
+    foreach bus_passengers [
+      ;for each bus see who it should drop off
+      ;bus-passangers returns a list of passengers that the agent is currently carrying
+      ;(represented as a list of [passenger_id bus_stop] tuples)
+      
+      ; drop off everyone who has current station as intermediary or final station
+      let passenger_dest get-routing-index-of-destination item 1 ?
+      let routing_dest item passenger_dest item bus_color routing_table
+      if routing_dest = "D" [
+        set routing_dest item 1 ?
+      ]
+      if routing_dest = current_stop [
+        drop-off-passenger item 0 ?
+        set empty_capacity empty_capacity + 1
+      ]
+    ]
     
+    ;Pickup then
+    if empty_capacity > 0 [ 
+    foreach get-passengers-at-stop current_stop [
+      ;for each bus see who it should pick up
+      ;pickup everyone except for those who need to be dropped at current station
+      let passenger_dest get-routing-index-of-destination item 1 ?
+      let routing_dest item passenger_dest item bus_color routing_table
+      if routing_dest != current_stop and empty_capacity > 0[
+        pick-up-passenger item 0 ?
+        set empty_capacity empty_capacity - 1
+      ]
+    ]
+    ]
   ]
-  
 end
