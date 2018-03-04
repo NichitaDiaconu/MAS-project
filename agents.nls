@@ -135,21 +135,17 @@ to init-buses
   ; Initialize your agents here.
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
-  ask buses [
-    if self = myself[
-    set bus_color 4
-    set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [22 13 23 14 0 15 18 15 12] [9 8 6 8 2 8]]
-    set central_to_route_routes [[3 4] [3 4 5 16] [3 9 20 21 22 13] [3 9 8]]
-    set bus_stops_to_idx ["Amstel" "Amstelveenseweg" "Buikslotermeer" "Centraal" "Dam"
-      "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
-      "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
-      "Surinameplein" "UvA" "VU" "Waterlooplein" "Weesperplein" "Wibautstraat" "Zuid"]
-    set routing_table [["D" 5 13 9 "D" "D" "D"] [5 "D" 13 13 "D" "D" 13] [13 13 "D" 13 13 "D" 13] [9 9 9 "D" 9 9 "D"]]
-    set initiated_buses_types []
-    set initiated_buses_colors []
-    set asked_for_help False
-    ]
-  ]
+  set bus_color 4
+  set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [22 13 23 14 0 15 18 15 12] [9 8 6 8 2 8]]
+  set central_to_route_routes [[3 4] [3 4 5 16] [3 9 20 21 22 13] [3 9 8]]
+  set bus_stops_to_idx ["Amstel" "Amstelveenseweg" "Buikslotermeer" "Centraal" "Dam"
+    "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
+    "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
+    "Surinameplein" "UvA" "VU" "Waterlooplein" "Weesperplein" "Wibautstraat" "Zuid"]
+  set routing_table [["D" 5 13 9 "D" "D" "D"] [5 "D" 13 13 "D" "D" 13] [13 13 "D" 13 13 "D" 13] [9 9 9 "D" 9 9 "D"]]
+  set initiated_buses_types []
+  set initiated_buses_colors []
+  set asked_for_help False
   
 end
 
