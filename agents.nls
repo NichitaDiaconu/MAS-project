@@ -42,6 +42,7 @@
 
 ; you don'tknow if bus 24 will be called last
 
+; a new bus should have bus_color = 4 and current_stop = 3
 buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
   bus_id          ; The ID of a given agent (bus). Each agent has a unique ID.
@@ -118,17 +119,15 @@ to initiate-new-bus [ b_type b_color ]
      show "ERROR we agreed on making buses only from bus 24"
    ]
    
-   ;FOT NOT VOTING INITIAL BUSES
    set initiated_buses_types lput b_type initiated_buses_types
    set initiated_buses_colors lput b_color initiated_buses_colors
-   
+
+   ;FOR NOT VOTING INITIAL BUSES
    if b_type = -1 [
      set b_type 3
    ]
    add-bus b_type
    
-   ;show "initiated bus"
-   ;show initiated_buses_types
 end
 
 to init-buses 
@@ -146,108 +145,106 @@ to init-buses
   set initiated_buses_types []
   set initiated_buses_colors []
   set asked_for_help False
-  
+  send-message 24 (list "initiated" bus_type)
 end
 
-to create-initiated-buses
-  if bus_id != 24 [
-     show "ERROR we agreed on making buses only from bus 24"
+to message-bus-new-stats [ new_bus_type new_bus_color new_bus_id]
+  ; HERE IS THE THING FOR INITIAL BUSES so they cannot call more buses
+  let no_vote False
+  if new_bus_type = -1 [
+    set new_bus_type 3
+    set no_vote True
   ]
-  let colors_to_create []
-  let types_to_create []
+  ; to here
   
-  foreach initiated_buses_types [ set types_to_create lput ? types_to_create ]
-  foreach initiated_buses_colors [ set colors_to_create lput ? colors_to_create ]
-  set initiated_buses_types []
-  set initiated_buses_colors []
-  
-  let new_bus_id -1
-  let new_bus_type -1
-  let new_bus_color -1
-  while [ not empty? types_to_create ] [
-    set new_bus_type last types_to_create
-    set types_to_create but-last types_to_create
-    set new_bus_color last colors_to_create
-    set colors_to_create but-last colors_to_create
-    
-    
-    ; HERE IS THE THING FOR INITIAL BUSES so they cannot call more buses
-    let no_vote False
-    if new_bus_type = -1 [
-      set new_bus_type 3
-      set no_vote True
-    ]
-    ; to here
-    
-    let colored_once false
-    ask buses[
-      if colored_once = false and bus_color = 4 and current_stop = 3 and bus_type = new_bus_type [
-        ; we found a new bus with type bus_type that is seated at central station
-        set bus_color new_bus_color
-        set new_bus_id bus_id
-        ;show word "colored bus id " (word bus_id (word " bus type " (word bus_type (word " with color " (word bus_color))))) 
-        set colored_once true
-        set capacity item bus_type [0 12 60 150]
-        set empty_capacity item bus_type [0 12 60 150]
-        if no_vote = True [
-          set asked_for_help True
-        ]
-      ]
-      ;show "should not appear after color with the same bus id"
-    ]
-    if colored_once = false [
-      show "ERROR should have found a bus to color if it was in the list for initiating"
-      stop
-    ]
- 
- 
-    ;update the color_to_buses for bus 24
-    if member? new_bus_id item 4 color_to_buses [
-      ;If the bus was part of the free buses, NOT the newly initialized, but not created buses
-       
-      ;replace the list of free buses with the list of free buses except for the newly set bus
-      let replace_with1 remove new_bus_id item 4 color_to_buses
-      set color_to_buses replace-item 4 color_to_buses replace_with1
-    ]
-    
-    ;add the new bus to the list of buses with the specific color
-    let replace_with lput new_bus_id item new_bus_color color_to_buses
-    set color_to_buses replace-item new_bus_color color_to_buses replace_with
-  ]
+  send-message new_bus_id (list "new_bus_instructions" new_bus_color no_vote)
 end
 
-to send-messages
+to send-message-help
   ; Send message
   if asked_for_help = False and capacity > 0 and empty_capacity / capacity < 0.25[
     ; to bus 24, I am bus_id with color bus_color make a bus of type 3
-    send-message 24 (list bus_color 2);word bus_id (word " " (word bus_color (" 3")))
+    send-message 24 (list "help" bus_color 3);word bus_id (word " " (word bus_color (" 3")))
     set asked_for_help True
   ]
 end
 
 to process-messages 
   ; process messages
-  if bus_id = 24 [
-    ; filter messages to process
+  ifelse bus_id = 24 [
+
+    ; filter messages to proces
     let to_process filter [ item 0 ? = ticks - 1 ] inbox
     
-    ; filter images to leave in the inbox
-    set inbox filter [ item 0 ? = ticks ] inbox
+    let new_initiate_msgs filter [ item 0 item 2 ? = "help" ] to_process
+    let new_construct_msgs filter [ item 0 item 2 ? = "initiated" ] to_process
     
-    ; spawn at most 1 bus per line
-    let new_per_color [0 0 0 0]
-    foreach to_process [
+    ; filter images to leave in the inbox
+    set inbox filter [ item 0 ? != ticks - 1 ] inbox
+    
+    ;send message to newly initiated bus about his color and type
+    foreach new_construct_msgs [
+      let new_bus_id item 1 ?
+      let new_bus_type item 1 item 2 ?
+
+      ;DUE TO THE FACT THAT I DO NOT SEARCH IN REQUESTS FOR BUS_COLOR BUS_TYPE PAIR, THIS ONLY WORKS IF BUS_TYPE IS ALWAYS THE SAME....
+      let new_bus_color last initiated_buses_colors
+      set initiated_buses_colors but-last initiated_buses_colors
+      message-bus-new-stats new_bus_type new_bus_color new_bus_id
       
+      ;update the color_to_buses for bus 24
+      if member? new_bus_id item 4 color_to_buses [
+        ;If the bus was part of the free buses ( NOT the newly initialized ) as he cannot be in the table if it's his first appearence
+        
+        ;replace the list of free buses with the list of free buses except for the newly set bus
+        let replace_with1 remove new_bus_id item 4 color_to_buses
+        set color_to_buses replace-item 4 color_to_buses replace_with1
+      ]
+      
+      ;add the new bus to the list of buses with the specific color
+      let replace_with lput new_bus_id item new_bus_color color_to_buses
+      set color_to_buses replace-item new_bus_color color_to_buses replace_with
+    ]
+    
+    ; spawn at most 1 bus per line at a tick no matter what they ask.... would result in two buses at same location
+    let new_per_color [0 0 0 0]
+    foreach new_initiate_msgs [
       let pair item 2 ?
-      let new_color item 0 pair
-      let new_type item 1 pair
+      let new_message item 0 pair
+      let new_color item 1 pair
+      let new_type item 2 pair
       
       if item new_color new_per_color = 0[
         initiate-new-bus new_type new_color
         set new_per_color replace-item new_color new_per_color 1
       ]
     ]
+  ][
+   ; message should contain new_bus_instruction
+   
+   if length inbox > 1[
+     show "ERROR regular buses inbox should never have more than 1 message inside"
+   ]
+   if length inbox = 1[
+     let new_message item 0 inbox
+     let pair item 2 new_message
+     let message_title item 0 pair
+     if message_title != "new_bus_instructions" [
+       show "ERROR regular buses should only get new_bus_instructions"
+     ]
+     let new_bus_color item 1 pair
+     let no_vote item 2 pair
+     set capacity item bus_type [0 12 60 150]
+     set empty_capacity item bus_type [0 12 60 150]
+     if no_vote = True [
+       set asked_for_help True
+     ]
+     set bus_color new_bus_color
+     
+     set inbox []
+   ]
   ]
+  ;endif
 end
 
 to execute-actions
@@ -256,18 +253,18 @@ to execute-actions
   ; The MAIN function called on LOOP at every tick
   
   ; Description ( too see how a new bus is creted there is documentation above initiate-new-bus method ):
-  
   if ticks = 2 and bus_id = 24 [
     set bus_color 0
     set color_to_buses [[24][][][][]]
     set asked_for_help True
+    set inbox []
   ]
   
   if bus_color != 4 [
   ;if bus has been created, not only initiated
-  if bus_id = 24 [
-    create-initiated-buses
-  ]
+  ;if bus_id = 24 [
+    ;create-initiated-buses
+  ;]
   ;pick up / drop off logic
   pick-drop
   
@@ -279,10 +276,7 @@ to execute-actions
 
   travel-to next_stop
    
-  send-messages
-  
-  process-messages
-  
+  send-message-help
   ; initiate one big bus for each line initially 
   ; initiate these busses from bus 24 at tick 2
   if ticks = 2 and bus_id = 24 [
@@ -302,14 +296,16 @@ to execute-actions
   ;  initiate-new-bus -1 1
   ;  initiate-new-bus -1 2
   ;]
-  if ticks > 1 and bus_id = 24 and ticks < 61 and ticks mod 10 = 0  [
-    ;pass
-    initiate-new-bus 3 0
-    initiate-new-bus 3 3
-    initiate-new-bus 3 1
-    initiate-new-bus 3 2
+  
+  ;if ticks > 1 and bus_id = 24 and ticks < 61 and ticks mod 10 = 0  [
+  ;  ;pass
+  ;  initiate-new-bus 3 0
+  ;  initiate-new-bus 3 3
+  ;  initiate-new-bus 3 1
+  ;  initiate-new-bus 3 2
+  ;]
   ]
-  ]
+  process-messages
 end
 
 to determine-and-set-next-stop
