@@ -33,8 +33,19 @@
 ;22 "Wibautstraat" 
 ;23 "Zuid"
 
+; bus colors: 0 blue 1 red 2 green 3 black 4 unassigned
+; line_role_in_vote_bid: 0 demand low 1 demand high 2 need help
 ; Implicit things nobody said:
 ; you add busses at a tick and they only appear at the next tick; moreover, id of the bus with add-bus is unknown...
+
+; Messages are prepended [ ticks bus_id ]
+
+; you don'tknow if bus 24 will be called last
+
+; a new bus should have bus_color = 4 and current_stop = 3
+
+;messages follow the following format: (list ticks sender_id (list message_title arguments*)
+
 
 buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
@@ -50,20 +61,51 @@ buses-own [
     
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
-  bus_routes 
-  central_to_route_routes 
-  bus_stops_to_idx 
-  bus_color
-  initiated_buses_types
-  initiated_buses_colors
-  routing_table
-  capacity
-  empty_capacity
+  
+  bus_routes      ; List of list of int, containing the route of each line described in the report
+  ;central_to_route_routes ; Depracated. Replaced by Breadth First Search. List of routes from central to line; 
+  bus_stops_to_idx ; List of string, bus stops names at the index corresponding with the node index in the graph
+  bus_color       ; int 0-4, each bus has a color corresponding to his line
+  initiated_buses_types ; List of int, a list of types of buses that this bus wants to create
+  initiated_buses_colors ; List of int, a list of colors of the buses that this bus wants to create
+  routing_table   ; List of list of int, The routing table for passengers, given the bus routes
+  capacity        ; int in [0, 30, 60 150], capacity of bus
+  empty_capacity  ; int, capacity - length bus_passengers
+  color_to_buses  ; lists of list of int, bus_id of buses that this bus created, each on the line corresponding to its color
+  ;asked_for_help ; Depracated, used to vote only a specific number of times
+
+  cumulated_demand ; Variable for storing and computing difference in demand from one tick to another
+  voting_process_step ; int 0-7, the step at which we are in the voting-biding process
+  line_role_in_vote_bid ; line_role_in_vote_bid: 0 demand low 1 demand high 2 need help
+  max_demand_line ; int max demand on line
+
+  desire ; str, in [ self_i benevolent ]  
 ]
 
 globals [graph]
 
+to init-buses 
+  ; Initialize your agents here.
+  ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
+  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+  set bus_color 4
+  set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [22 13 23 14 0 15 18 15 12] [9 8 6 8 2 8]]
+  ;set central_to_route_routes [[3 4] [3 4 5 16] [3 9 20 21 22 13] [3 9 8]]
+  set bus_stops_to_idx ["Amstel" "Amstelveenseweg" "Buikslotermeer" "Centraal" "Dam"
+    "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
+    "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
+    "Surinameplein" "UvA" "VU" "Waterlooplein" "Weesperplein" "Wibautstraat" "Zuid"]
+  set routing_table [["D" 5 13 9 "D" "D" "D"] [5 "D" 13 13 "D" "D" 13] [13 13 "D" 13 13 "D" 13] [9 9 9 "D" 9 9 "D"]]
+  set initiated_buses_types []
+  set initiated_buses_colors []
+  ;set asked_for_help False
+  
+  set desire "benevolent"
+  send-message 24 (list "initiated" bus_type)
+end
+
 to-report get-routing-index-of-destination [ dest_id ]
+  ; Since there are different indexes for the same station in different tables, this is a mapping
   if dest_id = 5 [
     ; Evertsenstraat
     report 4
@@ -100,134 +142,577 @@ to-report get-routing-index-of-destination [ dest_id ]
 end
 
 
-
 ; creating a bus takes:
 ;     - initiate-new-bus at tick i
-;     - create-initiated-bus at tick i+1
+;     - assigning color, etc. (create bus) at tick i+1 by messages
+
 to initiate-new-bus [ b_type b_color ] 
-   ;show "initiating"
-   add-bus b_type
+   ; initiate new bus, and store the desired color and type for the bus so we can give them at the next step by message
+   
+   if bus_id != 24 [
+     ERROR "we agreed on making buses only from bus 24"
+   ]
+   
    set initiated_buses_types lput b_type initiated_buses_types
    set initiated_buses_colors lput b_color initiated_buses_colors
-   ;show "initiated bus"
-   ;show initiated_buses_types
+
+   ; something we experimented with
+   ;FOR NOT VOTING INITIAL BUSES
+   ;if b_type = -1 [
+   ;  set b_type 3
+   ;]
+   add-bus b_type
+   
 end
 
-to init-buses 
-  ; Initialize your agents here.
-  ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
-  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
-  ask buses [
-    if self = myself[
-    set bus_color -1
-    set bus_routes [[3 4 5 10 13 22 21 20 9] [5 16 11 1 19 23 13 7 17] [22 13 23 14 0 15 18 15 12] [9 8 6 8 2 8]]
-    set central_to_route_routes [[3 4] [3 4 5 16] [3 9 20 21 22 13] [3 9 8]]
-    set bus_stops_to_idx ["Amstel" "Amstelveenseweg" "Buikslotermeer" "Centraal" "Dam"
-      "Evertsenstraat" "Floradorp" "Haarlemmermeerstation" "Hasseltweg" "Hendrikkade"
-      "Leidseplein" "Lelylaan" "Muiderpoort" "Museumplein" "RAI" "SciencePark" "Sloterdijk"
-      "Surinameplein" "UvA" "VU" "Waterlooplein" "Weesperplein" "Wibautstraat" "Zuid"]
-    set routing_table [["D" 5 13 9 "D" "D" "D"] [5 "D" 13 13 "D" "D" 13] [13 13 "D" 13 13 "D" 13] [9 9 9 "D" 9 9 "D"]]
-    set initiated_buses_types []
-    set initiated_buses_colors []
-    ]
+
+to message-bus-new-stats [ new_bus_type new_bus_color new_bus_id]
+  ; send a message to a specific bus with the parameters with which to instantiate itself
+  
+  ; something we experimented with
+  ; HERE IS THE THING FOR INITIAL BUSES so they cannot call more buses
+  ;let no_vote False
+  ;if new_bus_type = -1 [
+  ;  set new_bus_type 3
+  ;  set no_vote True
+  ;]
+  ; to here
+
+  send-message new_bus_id (list "new_bus_instructions" new_bus_color ) ;no_vote)
+end
+
+
+to-report check-demand-on-line [ bus_line ]
+  ; Compute the number of people that are waiting in the station on a given line
+  
+  let line_stations item bus_line bus_routes
+  let count_people 0
+  foreach line_stations [
+    set count_people ( count_people + (length get-passengers-at-stop ?) )
+  ]
+  report count_people
+end
+
+to-report check-capacity-on-line [ bus_line ]
+  ; compute the total capaity on a line of the buses initiated by this bus
+  
+  if bus_id != 24 [
+    ERROR "should only be called from busX"
+  ]
+  let buses_on_line item bus_line color_to_buses
+  
+  report 150 * length buses_on_line
+end
+
+to-report bfs [start_node list_of_end_nodes]
+  ; breadth first ssearch algorithm between a start node and a set of end nodes
+  ; returns a path from start to one of the nodes in the list_of_end_nodes that is also appended an a node adjecent to the end node
+  
+  if not is-list? list_of_end_nodes [
+    ERROR (word "list_of_end_nodes should be a list of possible end nodes. list_of_end_nodes: " (word list_of_end_nodes))
+  ]
+  if length list_of_end_nodes = 0 [
+    ERROR (word "list_of_end_nodes cannot be empty. list_of_end_nodes: " (word list_of_end_nodes))
+  ]
+  if member? start_node list_of_end_nodes [
+    ;go to the next station in this line if you just arrived in order to also set past station right
+    let idx position start_node list_of_end_nodes
+    set idx ((idx + 1) mod (length list_of_end_nodes ))
+    report (list item idx list_of_end_nodes)
   ]
   
-end
-
-to create-initiated-buses
-  let colors_to_create []
-  let types_to_create []
+  let visited []
+  let parents_visited []
+  let queue []
+  let parents_queue []
   
-  foreach initiated_buses_types [ set types_to_create lput ? types_to_create ]
-  foreach initiated_buses_colors [ set colors_to_create lput ? colors_to_create ]
-  set initiated_buses_types []
-  set initiated_buses_colors []
-  
-  let new_bus_id -1
-  let new_bus_type -1
-  let new_bus_color -1
-  while [ not empty? types_to_create ] [
-    set new_bus_type last types_to_create
-    set types_to_create but-last types_to_create
-    set new_bus_color last colors_to_create
-    set colors_to_create but-last colors_to_create
-    
-    let colored_once false
-    ask buses[
-      if colored_once = false and bus_color = -1 and current_stop = 3 and bus_type = new_bus_type [
-        ; we found a new bus with type bus_type that is seated at central station
-        set bus_color new_bus_color
-        set new_bus_id bus_id
-        ;show word "colored bus id " (word bus_id (word " bus type " (word bus_type (word " with color " (word bus_color))))) 
-        set colored_once true
-        set capacity item bus_type [0 12 60 150]
-        set empty_capacity item bus_type [0 12 60 150]
+  let node start_node
+  while [ not member? node list_of_end_nodes ] [
+    ; while we haven't reached our destination
+    foreach item node graph [
+      ; add the neighbours to the current node to the queue
+      if not member? ? visited [
+        ; only if they haven't been visited already
+        set queue lput ? queue
+        set parents_queue lput node parents_queue
       ]
-      ;show "should not appear after color with the same bus id"
     ]
-    if colored_once = false [
-      show "ERROR should have found a bus to color if it was in the list for initiating"
-      stop
+    ;move to a new node; the 1st node in queue
+    set node item 0 queue
+    
+    set visited lput (item 0 queue) visited
+    set parents_visited lput (item 0 parents_queue) parents_visited  
+    
+    set queue but-first queue
+    set parents_queue but-first parents_queue
+  ]
+  
+  ; node is end_node we now have to create path to it
+  let path (list node )
+  let idx_parent position node visited
+  let parent item idx_parent parents_visited
+  while [ parent != start_node ] [
+    set path fput parent path
+    set node parent
+    set idx_parent position node visited
+    set parent item idx_parent parents_visited
+  ]
+  
+  report path
+end
+
+to-report process-votes-and-get-demands
+  ; Count the votes per line and return the demands of each line
+  
+  if bus_id != 24 [
+    ERROR "should only be called from busX"
+  ]
+  
+  let sender -1
+  let pair -1
+  let message_title -1
+  let cummulated_votes (list 0 0 0 0)
+  let new_votes_count -1
+  let line -1
+    
+  ;count votes per line
+  foreach inbox [
+    set sender item 1 ?
+    set pair item 2 ?
+    set message_title item 0 pair
+    ifelse message_title = "positive vote" [
+      set line 0
+      while [ line < 4 ][
+        if member? sender item line color_to_buses [
+          set new_votes_count item line cummulated_votes
+          set new_votes_count ( new_votes_count + 1 )
+          set cummulated_votes replace-item line cummulated_votes new_votes_count
+        ]
+        set line (line + 1)
+      ]
+    ][
+      if message_title != "negative vote"[
+        ERROR (word "messages should be positive or negative votes. message: " (word ?))
+      ]
+      set line 0
+      while [ line < 4 ][
+        if member? sender item line color_to_buses [
+          set new_votes_count item line cummulated_votes
+          set new_votes_count ( new_votes_count - 1 )
+          set cummulated_votes replace-item line cummulated_votes new_votes_count
+        ]
+        set line (line + 1)
+      ]
     ]
+  ]
+  
+  set inbox []
+  
+  ; compute demands for each line as 0.75 * demand on line ( which is the lower bound of the help needed in order to satisfy the real and unknown demand - free capacity )
+  set line 0
+  let demands (list 0 0 0 0)
+  let demand_on_line 0
+  while [ line < 4 ][
+    if item line cummulated_votes > 0 [
+      set line_role_in_vote_bid replace-item line line_role_in_vote_bid 2
+      set demand_on_line (floor (0.75 *  check-demand-on-line line ))
+      set demands replace-item line demands demand_on_line
+    ]
+    set line (line + 1)
+  ]
+  
+  report demands
+end
+
+to-report check-start-vote-and-send-messages
+  ; count the votes.
+  ; if at least one of the lines require help, return true
+  ; ekse return false
+  
+  let start False
+  let line 0
+  while [ line < 4 ] [
+    ; foreach line
+    let demand_on_line check-demand-on-line line
+    let capacity_on_line check-capacity-on-line line
+    ;show (word "---- line" (word line (word " ----")))
+    ;show (word "Demand: " (word demand_on_line))
+    ;show (word "Capacity: " (word capacity_on_line))
+    if demand_on_line > (  capacity_on_line / 2 ) [
+      ; check if demand is half their capacity
+      ; if true set line_role_in_vote_bid to 1
+      ; set started voting True
+      set start True
+      set line_role_in_vote_bid replace-item line line_role_in_vote_bid 1
+      
+      foreach item line color_to_buses [
+        send-message ? (list "vote")
+      ]
+    ]
+    set line (line + 1)
+  ]
+  report start
+end
+
+to createbuses 
+  ; Initiate new buses and keep track of the new bus colors and bus types created
+  ; these informations are used to send the respective color and type to the bus at the next tick
+  ; Also each bus has stored all the buses_id and line of the buses it has initialized and created
+  
+  if bus_id != 24 [
+   ERROR "should only be called from busX"
+ ]
+ 
+ 
+ let new_construct_msgs filter [ item 0 item 2 ? = "initiated" ] inbox
+ if length new_construct_msgs != length inbox [
+   ERROR (word "there should only be messages of initiated buses in inbox. inbox: " (word inbox)) 
+ ]
+ 
+ set inbox []
+
+ ;send message to newly initiated bus about his color and type
+ foreach new_construct_msgs [
+   let new_bus_id item 1 ?
+   let new_bus_type item 1 item 2 ?
+   
+   ;DUE TO THE FACT THAT I DO NOT SEARCH IN REQUESTS FOR BUS_COLOR BUS_TYPE PAIR, THIS ONLY WORKS IF BUS_TYPE IS ALWAYS THE SAME....
+   let new_bus_color last initiated_buses_colors
+   set initiated_buses_colors but-last initiated_buses_colors
+   message-bus-new-stats new_bus_type new_bus_color new_bus_id
+   
+
+   if member? new_bus_id item 4 color_to_buses [
+     ;If the bus was part of the free buses ( NOT the newly initialized ) as he cannot be in the table if it's his first appearence
+     
+     ;replace the list of free buses with the list of free buses except for the newly set bus
+     let replace_with1 remove new_bus_id item 4 color_to_buses
+     set color_to_buses replace-item 4 color_to_buses replace_with1
+   ]
+   
+   ;add the new bus to the list of buses with the specific color
+   let replace_with lput new_bus_id item new_bus_color color_to_buses
+   set color_to_buses replace-item new_bus_color color_to_buses replace_with
+ ]
+end
+
+to bus-process-messages
+ ; This function is called by every bus, except bus 24
+ ; There is a specific bahavious for each type of message in the inbox
+ if bus_id = 24 [
+   ERROR "should only be called from outside busX"
+ ]
+ if length inbox > 1[
+   ERROR (word "regular buses inbox should never have more than 1 message inside. Inbox: " (word inbox))
+ ]
+ 
+ ;show (word "inbox: " (word inbox))
+ ;show (word "passengers nr: " (word length bus_passengers))
+ if length inbox = 1 [
+   let new_message item 0 inbox
+   let pair item 2 new_message
+   let message_title item 0 pair
+   
+   if message_title = "vote" [
+     ; Process voting message
+     
+     ifelse (length bus_passengers) / capacity > 0.5 [
+       ;show (word "sending positive vote. Bus passangers: " (word length bus_passengers))
+       send-message 24 (list "positive vote")
+     ][
+       ;show (word "sending negative vote. Bus passangers: " (word length bus_passengers))
+       send-message 24 (list "negative vote")
+     ]
+   ]
+   
+   if message_title = "new_bus_instructions" [
+     ; message with details about this buss color
+     
+     ;show "getting my new shiny color"
+     let new_bus_color item 1 pair
+     
+     set capacity item bus_type [0 12 60 150]
+     set empty_capacity item bus_type [0 12 60 150]
+     
+     ;Past experiment
+     ;let no_vote item 2 pair
+     ;if no_vote = True [
+     ;  set asked_for_help True
+     ;]
+     
+     set bus_color new_bus_color
+     set inbox []
+   ]
+   
+   if message_title = "bid_for_line" [
+     ; if a request for bid has been sent. Respond with the free capacity
+     ; check if desire is benevolent or self interested and act accordingly
+     ifelse desire = "benevolent" [
+       send-message 24 (list "bid" (capacity - length bus_passengers) )
+     ][
+       if desire != "self-i" [
+         ERROR (word "should always be one of the two. desire: " (word desire))
+       ]
+     ]
+   ]
+   
+   if message_title = "bid_won_go_to" [ 
+     ; if this bus won the bid, we assign it the new color
+     let new_bus_color item 1 pair
+     set bus_color new_bus_color
+   ]
+   
+   set inbox []
+ ]
+end
+
+to process-bid-results-for-line [line]
+  ; process the results of an auction
+  ; take each message, sort them by the value and send the top n that can satisfy the whole auction a message ("bid_won_go_to" new_line)
+  let aux filter [ item 0 item 2 ? != "bid" ] inbox
+  if length aux != 0 [
+    ERROR (word "should contain only bids. Inbox: " (word inbox))
+  ]
+  let bid_msgs filter [ item 0 item 2 ? = "bid" ] inbox
+  
+  ;first sort them by the number of empty spaces
+  let sorted_bid_msgs sort-by [ ( item 1 item 2 ?1 ) > ( item 1 item 2 ?2 )] bid_msgs
+  ;show (word "to sort " (word bid_msgs)) 
+  ;show (word "sorted " (word sorted_bid_msgs))
+  
+  let new_value -1
+  let sender -1
+  foreach sorted_bid_msgs [ 
+    if (item line cumulated_demand) > 0 [
+      set sender item 1 ?
+      send-message sender (list "bid_won_go_to" line)
+      ifelse item line cumulated_demand < 151 [
+        set cumulated_demand replace-item line cumulated_demand 0
+      ][
+        set new_value ( (item line cumulated_demand) - 150 ) 
+        set cumulated_demand replace-item line cumulated_demand new_value 
+      ]
+      
+    ]
+  ]
+  
+  set inbox []
+end
+
+to initiate-bidding 
+  ; Here we choose the line with the highest demand
+  ; All the buses on lines that are not in high demand are sent messages to bid on the passengers on the line with the max demand
+  ;show "Should start biding now"
+  
+  ;first get the max cause with biding we are only trying to help the highest demand line
+  let line 0
+  let max_demand 0
+  let max_line -1
+  
+  while [ line < 4 ] [
+    if item line cumulated_demand > max_demand [
+      set max_demand item line cumulated_demand
+      set max_line line
+    ]
+    set line line + 1
+  ]
+  
+  ;show (word " max demand on line " (word max_demand (word " " (word max_line))))
+  set max_demand_line max_line
+  set line 0
+  let bus_nr -1
+  while [ line < 4 ] [
+    ;show (word "considering line " (word line))
+    if (item line line_role_in_vote_bid) = 0 [
+      ; a line that is not overpopulated
+      ;show (word "this line is good " (word line))
+      
+      set bus_nr 0
+      foreach item line color_to_buses [
+        if bus_nr != 0[
+        ; for each bus on this line, send a request for biding
+          ;show (word " send to message to bid " (word  ?))
+          send-message ? (list "bid_for_line" line)
+        ]
+        set bus_nr 1
+      ]
+    ]
+    set line line + 1
   ]
 end
 
+
+; 0 means doing well, not a lot of people ( < 50% )
+; 1 means doing well, but there are people ( > 50%, but voted no help)
+; 2 means doing bad and there are people( > 50%, and voted need help) ( > 75 %)
+
+to busX-routine
+  ; This is the specific routin that busX is following 
+  ; at any tick t it cheks if a voting procedure should be started ( t is incremented at every tick only if process succeeds )
+  ; at t + 2 - it processes votes
+  ;          - checks if an auction should start
+  ;          - start bid
+  ; at t + 4 - it processes bids
+  ;          - sends requests for initiating new buses according to the demands left after the bid, if any 
+  ; at t + 6 - newly initialized buses are colored
+  ; at t + 7 - voting parameters are reset
+  
+  let step True
+  ;show (word "voting step: " (word voting_process_step))
+  ;show (word "busX inbox: " (word inbox))
+  if voting_process_step = 0 [
+    let started check-start-vote-and-send-messages
+    set step started
+  ]
+  
+  if voting_process_step = 2 [
+    let demands process-votes-and-get-demands
+    ;show (word "demands after vote" (word demands))
+    set cumulated_demand demands
+    let bidding False
+    ;show (word "vote bid roles: " (word line_role_in_vote_bid))
+    ifelse member? 0 line_role_in_vote_bid and member? 2 line_role_in_vote_bid [
+      set bidding True  
+    ][
+      set voting_process_step voting_process_step + 2
+    ]
+    
+    
+    if bidding [ initiate-bidding ]
+  ]
+  
+  if voting_process_step = 4 [
+    ; we should first see if we have to collect bids and decide. If no bids, means we did not bid and just send reinforcements
+    if length inbox != 0 [
+      process-bid-results-for-line max_demand_line
+    ]
+    
+    let demand_line -1
+    let nr_buses -1
+    let line 0
+    while [ line < 4 ] [
+      set demand_line item line cumulated_demand
+      set demand_line demand_line
+      set nr_buses (ceiling (demand_line / 150))
+      
+      let initiated 0
+      while [initiated < nr_buses] [
+        initiate-new-bus 3 line
+        set initiated (initiated + 1)
+      ]
+      set line (line + 1)
+    ]
+  ]
+  
+  if voting_process_step = 6 [
+    createbuses
+  ]
+  if voting_process_step = 7 [
+    set step False
+    set cumulated_demand (list 0 0 0 0)
+    set voting_process_step 0
+    set line_role_in_vote_bid (list 0 0 0 0)
+    ;show "Finished voting and biding"
+    set max_demand_line -1
+  ]
+  
+  if step = True [
+    set voting_process_step (voting_process_step + 1)
+  ]
+end
+
+
+to check-desire
+  ; checks capacity and sets desire
+  ifelse empty_capacity > 0.4 * capacity [
+    set desire "benevolent"
+  ][
+    set desire "self-i"
+  ]
+end
 
 
 to execute-actions
-  ; Add decision making strategies for your agents here.
-  ; You are allowed to use the global variable 'ticks'.
-  ; The MAIN function called on LOOP at every tick
+  ; main function:
+  ; - at initial tick color the initial busX
+  ; - call busX routine
+  ; - pick-up/drop-off for all buses
+  ; - determine, set and travel to next stop for all buses
+  ; - process-messages from buses, except busX
+  ; - create the initial 3 buses if on tick 2
   
-  ; Description ( too see how a new bus is creted there is documentation above initiate-new-bus method ):
-  
-  if ticks = 2 and bus_id = 24 [
-    set bus_color 0
+  ; at the first tick we color busX
+  ; at all ticks the routine special to busX is called
+  if bus_id = 24 [
+    ifelse ticks < 3 [ 
+      set line_role_in_vote_bid [0 0 0 0]
+      set bus_color 0
+      set color_to_buses [[][][][][]]
+      ;set asked_for_help True
+      set inbox []
+      set cumulated_demand (list 0 0 0 0)
+      set voting_process_step 0
+      set empty_capacity item bus_type [0 12 60 150]
+    ]
+    [
+      busX-routine
+    ]
   ]
   
-  if bus_color != -1 [
-  create-initiated-buses
   
-  ;pick up / drop off logic
-  pick-drop
-  
-  ;when not between stations aka when in a station
-  if current_stop != -1
+  if bus_color != 4
   [
-    determine-and-set-next-stop
-  ]
-
-  travel-to next_stop
-   
-
-  ; initiate these busses from bus 24 at tick 2
-  if ticks = 2 and bus_id = 24 [
-    let pass -1
+    ;For all buses that have been given a color ( 4 means no color )
+    
+    ;pick up / drop off logic
+    ; only when we have arrived at a station on our line
+    if ( member? current_stop item bus_color bus_routes ) [
+      pick-drop
+    ]
+    
+    check-desire
+    
+    ;when not between stations aka when in a station
+    ; we should find and set next station
+    if current_stop != -1
+    [
+      determine-and-set-next-stop
+    ]
+    
+    ;travel to the next stop
+    travel-to next_stop
   ]
   
-  if ( ticks = 3 or ticks mod 33 = 0 ) and ticks < 100 and bus_id = 24 [
+  if bus_id != 24 [
+    ; Processing messages, from buses outside busX
+    bus-process-messages
+  ]
+  
+  ; the first 3 buses separately and color them ( create them )
+  ; the first 3 buses are created outside the voting loop and require the specific methods being called separately at a tick before 6
+  if ticks = 2 and bus_id = 24 [
     initiate-new-bus 3 0
     initiate-new-bus 3 1
     initiate-new-bus 3 2
     initiate-new-bus 3 3
   ]
-  if ticks > 2 and ticks < 100 and ticks mod 10 = 0 and bus_id = 24 [
-    initiate-new-bus 2 0
-    initiate-new-bus 2 1
-    initiate-new-bus 2 2
-    initiate-new-bus 2 3
+  if ticks < 6 [
+    ;first buses are created outside the big loop for testing purposes
+    ;process-messages
+    ifelse bus_id = 24 [ createbuses ] [ bus-process-messages ]
   ]
-  ]
+  
 end
 
 to determine-and-set-next-stop
   ;create a method that sets next_stop of any bus to the next stop on that buss line
 
   let idx 0
-  ifelse bus_color != -1 
+  ifelse bus_color != 4
   ; bus only initialized but not created
   [
   foreach item bus_color bus_routes [
+    ; THIS COULD BE WRITTEN BETTER.... time is a virtue
     ; for each station in the route of this buss color 
     let prev_idx idx - 1
     if prev_idx = -1[
@@ -243,7 +728,7 @@ to determine-and-set-next-stop
       [
         let next_idx idx + 1
         set next_stop item next_idx item bus_color bus_routes
-        ;show word "at stop " (word current_stop (word " set next stop " (word next_stop)))
+        ;;show word "at stop " (word current_stop (word " set next stop " (word next_stop)))
       ]
       ;endif
     ]
@@ -251,29 +736,19 @@ to determine-and-set-next-stop
   ]
   if next_stop = -1 [
     ; if we did not find current_stop in the route of this buss line
-    ; means we are not on our line yet and we should go there 1st by finding our route in central_to_route_routes
-    set idx 0
-    foreach item bus_color central_to_route_routes [
-      ; for each station in the route from centrat to this colors route 
-      if ? = current_stop [
-        ; if we found the current station, set the next station
-        ifelse idx + 1 = length item bus_color bus_routes [
-          ; if we are at the last stop in the list
-          show "ERROR we should be on this buss colour normal route"
-        ]
-        [
-          let next_idx idx + 1
-          let my_colors_route_to_route item bus_color central_to_route_routes
-          set next_stop item next_idx my_colors_route_to_route
-        ]
-        ;endif
-      ]
-      set idx idx + 1
+    ; means we are not on our line yet and we should go there 1st by finding our route with BFS
+    let my_route item bus_color bus_routes
+    let path bfs current_stop my_route
+    set next_stop item 0 path
+    ;Also drop passengers if we have any as we have changed line
+    foreach bus_passengers [
+      drop-off-passenger item 0 ?
+      set empty_capacity empty_capacity + 1
     ]
   ]
   ]
   [
-    ;show "WARNING tried to set next stop of an uncreated bus"
+    ;;show "WARNING tried to set next stop of an uncreated bus"
   ]
 end
 
@@ -282,6 +757,7 @@ end
 ;picking up and delivering logic
 ;pick up who
 to pick-drop
+  
   ;pick up / drop off logic
   
   ;Drop first
@@ -305,6 +781,9 @@ to pick-drop
     ]
     
     ;Pickup then
+    if empty_capacity != (item bus_type [0 12 60 150] - length bus_passengers) [
+      ERROR (word "empty capacity should be equal to 150 - length bus_passengers. Empty capacity / length" (word empty_capacity (word " / " (word ( length bus_passengers)))))
+    ]
     if empty_capacity > 0 [ 
     foreach get-passengers-at-stop current_stop [
       ;for each bus see who it should pick up
